@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+      <meta charset="utf-8">
+      <title>country vaccinations</title>
+      <script type="text/javascript" src= "https://d3js.org/d3.v6.js"></script>
+      <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+
+    <svg id="header"></svg>
+    <svg id="chart1"></svg>
+    <svg id="chart2"></svg>
+        
+    <script type="text/javascript">
+    
+    Promise.all([
+      d3.csv("data/output/vaccinations.csv")
+      ])
+      .then(function(dataList) {
+
+      const data_all = dataList[0];
+
+      console.log(data_all);
+
+      const data_missing = data_all.filter(({people_vaccinated}) => +people_vaccinated === 0);
+      //console.log(data_missing);
+      const data_not_missing = data_all.filter(({people_vaccinated}) => +people_vaccinated > 0);
+      //console.log(data_not_missing);
+
+      const pop_all = d3.sum(data_all, d => +d.population);
+      const pop_not_missing = d3.sum(data_not_missing, d => +d.population);
+
+
+      // DIMENSIONS
+
+      const width = 700;
+
+      const margin = {
+        top: 0,
+        right: 15,
+        bottom: 0,
+        left: 15
+      };
+
+      const bar = {
+        w: (width - margin.left - margin.right),
+        h: 150 // sets height all bar charts so that house squares will be perfectly square (house grid is 87 by 5)
+      };
+
+      d3.select('#header')
+        .attr('width', width)
+        .attr('height', 66);
+
+      d3.select('#chart1')
+        .attr('width', width)
+        .attr('height', 250);
+
+      d3.select('#chart2')
+        .attr('width', width)
+        .attr('height', 250);
+
+
+      // CHART
+
+      // function for stacking data
+      const myStack = function (dataToStack) {
+        const total = d3.sum(dataToStack, d => d.population);
+        let stackPosition = 0;
+        return dataToStack.sort((a,b)=>d3.descending(+a.people_vaccinated_per_hundred, +b.people_vaccinated_per_hundred))
+          .map(d => ({
+            iso_code: d.iso_code,
+            continent: d.continent,
+            location: d.location,
+            people_vaccinated_per_hundred: +d.people_vaccinated_per_hundred,
+            people_vaccinated: +d.people_vaccinated,
+            population: +d.population,
+            startPosition: stackPosition,
+            endPosition: (stackPosition += +d.population)
+          }));
+      };
+
+      //console.log(myStack(data));
+
+      // function to draw chart
+      function drawChart(svg, data, pop) {
+
+        const pop_vaxed = d3.select(svg).append('g')
+          .selectAll('rect')
+          .data(myStack(data)) // uses stacked data
+          .join('rect')
+          .attr('x', d=> d.startPosition / pop * bar.w + margin.left)
+          .attr('y', d=> (1 - d.people_vaccinated_per_hundred / 100) * bar.h + margin.top)
+          .attr('width', d=> d.population / pop * bar.w)
+          .attr('height', d=> d.people_vaccinated_per_hundred / 100 * bar.h)
+          .style('fill', '#437829')
+          .attr('class', 'rect');
+
+        const pop_not_vaxed = d3.select(svg).append('g')
+          .selectAll('rect')
+          .data(myStack(data)) // uses stacked data
+          .join('rect')
+          .attr('x', d=> d.startPosition / pop * bar.w + margin.left)
+          .attr('y', margin.top)
+          .attr('width', d=> d.population / pop * bar.w)
+          .attr('height', d=> (1 - d.people_vaccinated_per_hundred / 100) * bar.h)
+          .style('fill', function(d){
+            if(+d.people_vaccinated > 0) {
+              return 'pink';
+            } else {
+              return 'gray';
+            }
+          })
+          .attr('class', 'rect');
+
+        const herdLine = d3.select(svg).append('line')
+          .attr('x1', margin.left)
+          .attr('y1', margin.top + 0.2 * bar.h)
+          .attr('x2', margin.left + bar.w)
+          .attr('y2', margin.top + 0.2 * bar.h)
+          .attr('class', 'herdLine');
+
+        const labels = d3.select(svg).append('g')
+          .selectAll('text')
+          .data(myStack(data))
+          .join('text')
+          .text(function(d) {
+            if(d.population > 50000000){
+              return d.location;
+            } else {
+              return null;
+            }
+          })
+          .attr('x', d=> (d.startPosition + d.population / 2) / pop * bar.w + margin.left + 3)
+          .attr('y', margin.top + bar.h + 5)
+          .attr("transform", function (d) {
+            var xRot = d3.select(this).attr("x");
+            var yRot = d3.select(this).attr("y");       
+            return `rotate(-90, ${xRot},  ${yRot} )` //ES6 template literal to set x and y rotation points
+          }) 
+          .attr('class', 'label');
+
+      } // end drawChart
+
+      // draw charts
+      drawChart('#chart1', data_all, pop_all);
+      // drawChart('#chart1', data_not_missing, pop_not_missing);
+      // drawChart('#chart2', data_missing, pop_not_missing);
+
+
+      // LABELS
+
+      const title = d3.select('#header').append('text')
+        .text('A Long Way to Go')
+        .attr('x', margin.left)
+        .attr('y', 20)
+        .attr('class', 'title');
+
+      const subtitle = d3.select('#header').append('text')
+        .text('Share that has received at least one dose of a vaccine, with countries sized by population')
+        .attr('x', margin.left)
+        .attr('y', 42)
+        .attr('class', 'subtitle');
+
+
+
+    })
+        .catch(function(error){
+          console.log(error);
+    });
+
+    </script>
+  </body>
+</html>
